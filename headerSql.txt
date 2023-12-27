@@ -1,0 +1,78 @@
+select {calc_ym_ser} as calc_ym_ser
+     , {user_id_ser} as user_id_ser
+     , a.calc_ym
+     , a.agency_cd
+     , a.region
+     , a.agency_name
+     ,a.region_agency_name
+     , if(a.sales_account_cd is null and b.no is null, '', a.bond_debt_status) as bond_debt_status
+     , if(a.sales_account_cd is null and b.no is null, '', concat('<span class="form-circle-sm" style="background-color:', if(a.bond_debt_status = 'N', '#c00', '#4472c4'), ';"><span style="color:white;">', a.bond_debt_status_name, '</span</span>')) as bond_debt_status_name
+     , a.bond_debt_type
+     , if(a.bond_debt_type is null, '합계', if(a.sales_account_cd is null and b.no is null, '계', a.bond_debt_type_name)) as bond_debt_type_name
+     , a.sales_account_cd
+     , if(a.sales_account_cd is null, '', a.remark) as remark
+     , if(a.sales_account_cd is null, '', a.account_nm) as account_nm
+     , a.amount
+     ,a.cust_biz_no
+	 ,a.cust_company_name
+	 ,a.cust_ceo_name
+	 ,a.cust_address
+	 ,a.company_biz_no
+	 ,a.company_company_name
+	 ,a.company_ceo_name
+	 ,a.company_address
+     , if(b.no is null, '', if(a.bond_debt_type = 'D', '결제 대상액 계', '지급 대상액 계')) as memo
+     , if(a.sales_account_cd is null, '', a.createuser) as createuser
+     , if(a.sales_account_cd is null, '', a.createdate) as createdate
+     , if(a.sales_account_cd is null, '', a.updateuser) as updateuser
+     , if(a.sales_account_cd is null, '', a.updatedate) as updatedate
+     , LAST_DAY(STR_TO_DATE(a.calc_ym, '%Y-%m')) as last_day
+     , DATE_FORMAT(CURDATE(), '%Y-%m-%d') as cur_date
+  from (select a.calc_ym
+             , a.agency_cd
+             , c.region
+             ,concat(c.region,' ',c.agency_name) as region_agency_name
+             , c.agency_name
+             , a.bond_debt_status
+             , e.bond_debt_status_name
+             , a.bond_debt_type
+             , f.bond_debt_type_name
+             , a.sales_account_cd
+             , b.remark
+             , b.account_nm
+             , sum(a.amount) as amount
+             , a.memo
+             , a.createuser
+             , a.createdate
+             , a.updateuser
+             , a.updatedate
+             , b.sort as account_sort
+             , d.sort as region_sort
+             , c.biz_no as cust_biz_no
+			 , c.biz_name as cust_company_name
+		     , c.ceo_name as cust_ceo_name
+			 , c.address as cust_address
+			 , company.company_no as company_biz_no
+			 , company.company_name as company_company_name
+			 , company.ceo_name as company_ceo_name
+			 , company.company_address1 as company_address
+          from tb_ma_agency_emp emp
+          join tb_bond_debt a on a.agency_cd = emp.agency_cd
+          left join tb_ma_account_sales b on b.sales_account_cd = a.sales_account_cd
+          left join tb_ma_agency c on c.agency_cd = a.agency_cd
+          left join vw_ma_code_bond_debt_status e on e.bond_debt_status = a.bond_debt_status
+          left join vw_ma_code_bond_debt_type f on f.bond_debt_type = a.bond_debt_type
+          left join vw_ma_code_region d on d.region_cd = c.region
+          left join tb_ma_company company on company.company_cd = 'YANMAR'
+         where 1 = 1
+           and emp.user_id = {user_id_ser}
+           and a.calc_ym = {calc_ym_ser} 
+         group by a.agency_cd, a.bond_debt_type, a.sales_account_cd with rollup
+         having a.agency_cd is not null
+       ) a
+left join (select 'D' bond_debt_type, null no union all
+           select 'D' bond_debt_type, 1 no union all
+           select 'B' bond_debt_type, null no union all
+           select 'B' bond_debt_type, 1 no) b on b.bond_debt_type = a.bond_debt_type and a.sales_account_cd is null
+  order by if(a.bond_debt_type is null, 1, 0), b.no, a.bond_debt_type desc
+         , if(a.sales_account_cd is null, 1, 0), a.account_sort
